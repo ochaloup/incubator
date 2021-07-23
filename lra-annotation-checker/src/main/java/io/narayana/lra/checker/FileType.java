@@ -26,9 +26,7 @@ package io.narayana.lra.checker;
 /**
  * Enum used to distinguished what type of file
  * was provided as argument of the maven plugin.
- *
- * @author Ondra Chaloupka <ochaloup@redhat.com>
  */
-public enum FileType {
+enum FileType {
     JAR, DIRECTORY
 }
