@@ -38,6 +38,7 @@ import org.eclipse.microprofile.lra.annotation.ParticipantStatus;
 import org.eclipse.microprofile.lra.annotation.Status;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
+import org.jboss.logging.Logger;
 import org.jboss.weld.util.collections.Sets;
 
 import javax.ws.rs.DELETE;
@@ -47,6 +48,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.ArrayList;
@@ -72,16 +74,24 @@ import java.util.stream.Stream;
  * </p>
  */
 public class LraAnnotationProcessingExtension implements Extension {
+    private static final Logger log = Logger.getLogger(LraAnnotationProcessingExtension.class);
 
     private static final List<Class<? extends Annotation>> LRA_METHOD_ANNOTATIONS =
             Arrays.asList(Compensate.class, Complete.class, AfterLRA.class, Forget.class, Status.class, Leave.class);
 
     <X> void processLraAnnotatedType(@Observes @WithAnnotations({LRA.class}) ProcessAnnotatedType<X> classAnnotatedWithLra) {
-        System.out.println("Processing " + classAnnotatedWithLra); // DELETE ME: !!!
+        log.debugf("Processing class:", classAnnotatedWithLra);
+
+        // Let's working only with instantiable classes - no abstract, no interface
+        Class<?> classAnnotated = classAnnotatedWithLra.getAnnotatedType().getJavaClass();
+        if (classAnnotated.isAnnotation() || classAnnotated.isEnum() || classAnnotated.isInterface() || Modifier.isAbstract(classAnnotated.getModifiers())) {
+            log.debugf("Skipping class: %s as it's not standard instantiable class", classAnnotatedWithLra);
+            return;
+        }
 
         // All compulsory LRA annotations are available at the class
         Supplier<Stream<AnnotatedMethod<? super X>>> methodsSupplier = () -> classAnnotatedWithLra.getAnnotatedType().getMethods().stream();
-        String classAnnotatedWithLraName = classAnnotatedWithLra.getAnnotatedType().getJavaClass().getName();
+        String classAnnotatedWithLraName = classAnnotated.getName();
 
         // LRA class has to contain @Compensate or @AfterLRA
         if (methodsSupplier.get().noneMatch(m -> m.isAnnotationPresent(Compensate.class) || m.isAnnotationPresent(AfterLRA.class))) {
@@ -103,7 +113,10 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .collect(Collectors.toList());
         lraAnnotations.addAll(methodLraAnnotations);
 
+        // Need to filter only to most concrete method in hierarchy
+        List<Class<?>> classHierarchy = getClassHierarchy(classAnnotated);
         // Listing the methods of one type
+        System.out.println(">>>>>>>>>>>>>" + classHierarchy);
         List<AnnotatedMethod<? super X>> methodsWithCompensate = methodsSupplier.get()
                 .filter(m -> m.isAnnotationPresent(Compensate.class))
                 .collect(Collectors.toList());
@@ -113,9 +126,16 @@ public class LraAnnotationProcessingExtension implements Extension {
         List<AnnotatedMethod<? super X>> methodsWithStatus = methodsSupplier.get()
                 .filter(m -> m.isAnnotationPresent(Status.class))
                 .collect(Collectors.toList());
+        // ------------------ ****
         List<AnnotatedMethod<? super X>> methodsWithAfterLRA = methodsSupplier.get()
                 .filter(m -> m.isAnnotationPresent(AfterLRA.class))
+                .filter(m -> {
+                    List<Method> methodHierarchy = getMethodHierarchy(classHierarchy, AfterLRA.class);
+                    System.out.println(">>>> " + methodHierarchy);
+                    return !methodHierarchy.isEmpty() && m.getJavaMember().getDeclaringClass() == methodHierarchy.get(0).getDeclaringClass();
+                })
                 .collect(Collectors.toList());
+        // ------------------ ^^^^
         List<AnnotatedMethod<? super X>> methodsWithLeave = methodsSupplier.get()
                 .filter(m -> m.isAnnotationPresent(Leave.class))
                 .collect(Collectors.toList());
@@ -206,7 +226,7 @@ public class LraAnnotationProcessingExtension implements Extension {
         List<AnnotatedMethod<? super X>> methodsWithAfterLRANonJaxRS = methodsWithAfterLRA.stream()
                 .filter(method -> !method.isAnnotationPresent(Path.class)) // it's not a REST method(!?)
                 .collect(Collectors.toList());
-        methodsWithAfterLRA.removeAll(methodsWithAfterLRANonJaxRS);
+        methodsWithAfterLRANonJaxRS.forEach(methodsWithAfterLRA::remove);
         methodsWithAfterLRANonJaxRS.stream()
                 .filter(LraAnnotationProcessingExtension.checkNotPublicWithParameterTypes(URI.class, LRAStatus.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
@@ -249,7 +269,7 @@ public class LraAnnotationProcessingExtension implements Extension {
 
         if (methodsWithAfterLRA.size() > 0) {
             // @AfterLRA - requires @Path and @PUT
-            final AnnotatedMethod<? super X> methodWithAfterLRA = methodsWithAfterLRA.get(0);
+            final AnnotatedMethod<? super X> methodWithAfterLRA = methodsWithAfterLRA.iterator().next();
             Consumer<Class<? extends Annotation>> afterLRAMissingJaxRsAnnotation = missingJaxRsAnnotationFailure(methodWithAfterLRA, AfterLRA.class);
             boolean isAfterLRAContainsPathAnnotation = methodWithAfterLRA.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(Path.class));
             if (!isAfterLRAContainsPathAnnotation) {
@@ -333,6 +353,40 @@ public class LraAnnotationProcessingExtension implements Extension {
     private static String getMethodSignatureErrorMsg(AnnotatedMethod<?> method, Class<?> clazz, Class<?> lraTypeAnnotation, String correctSignature) {
         return String.format("Signature for annotation '%s' in the class '%s' on method '%s'. It should be '%s'",
                 lraTypeAnnotation.getName(), clazz.getName(), method.getJavaMember().getName(), correctSignature);
+    }
+
+    private static List<Class<?>> getClassHierarchy(Class<?> childClass) {
+        List<Class<?>> classHierarchy = new ArrayList<>();
+        if (childClass == null) return classHierarchy;
+        Class<?> classToAdd = childClass;
+        while (classToAdd != null) {
+            classHierarchy.add(classToAdd);
+            classToAdd = classToAdd.getSuperclass();
+        }
+        return classHierarchy;
+    }
+
+    private static List<Method> getMethodHierarchy(final List<Class<?>> classHierarchy, final Class<? extends Annotation> annotationClass) {
+        List<Method> list = new ArrayList<>();
+        for (Class<?> clazz: classHierarchy) {
+            // System.out.println("C: " + clazz +", ann class: " + annotationClass); TODO: deleete me
+            for(Method m: clazz.getMethods()) {
+                // System.out.println(" M: " + m + ", " + Arrays.asList(m.getAnnotations())); // TODO: delete me
+                if(Arrays.stream(m.getAnnotations()).anyMatch(a -> a.annotationType()== annotationClass)) {
+                    list.add(m);
+                }
+            }
+        }
+        return list;
+    }
+
+    static final class MethodHolder<X> {
+        final AnnotatedMethod<? super X> method;
+        final Class<?> classWhereMethodIsFirstDeclaredInHierarchy;
+        MethodHolder(AnnotatedMethod<? super X> method, Class<?> firstInHierarchyClass) {
+            this.method = method;
+            this.classWhereMethodIsFirstDeclaredInHierarchy = firstInHierarchyClass;
+        }
     }
 
     private static Predicate<AnnotatedMethod<?>> checkNotPublicWithParameterTypes(Class<?>... clazzes) {

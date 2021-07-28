@@ -26,7 +26,9 @@ import io.narayana.lra.checker.bean.AsyncSuspendWithoutForgetBean;
 import io.narayana.lra.checker.bean.CorrectBean;
 import io.narayana.lra.checker.bean.CorrectMethodLRABean;
 import io.narayana.lra.checker.bean.NoPutOrGetBean;
-import io.narayana.lra.checker.bean.hierarchy.ChildLRABean;
+import io.narayana.lra.checker.bean.hierarchy.base.ChildLRABean;
+import io.narayana.lra.checker.bean.hierarchy.wrong.BadParent;
+import io.narayana.lra.checker.bean.hierarchy.wrong.GoodLRAChild;
 import io.narayana.lra.checker.bean.jaxrs.AfterLRAWithoutPutBean;
 import io.narayana.lra.checker.bean.jaxrs.CompensateWithoutPutBean;
 import io.narayana.lra.checker.bean.jaxrs.CompleteWithoutPutBean;
@@ -165,6 +167,14 @@ public class LraCdiCheckTest {
     public void hierarchyAfterLRA() {
         initWeld(ChildLRABean.class);
         Assert.assertTrue("No failure expected at " + ChildLRABean.class.getName() + " but was "
+                + FailureCatalog.INSTANCE.formatCatalogContent(), FailureCatalog.INSTANCE.isEmpty());
+    }
+
+    @Test
+    public void hierarchyGoodChildBadParent() {
+        initWeld(BadParent.class);
+        initWeld(GoodLRAChild.class);
+        Assert.assertTrue("No failure expected at " + GoodLRAChild.class.getName() + " but was "
                 + FailureCatalog.INSTANCE.formatCatalogContent(), FailureCatalog.INSTANCE.isEmpty());
     }
 

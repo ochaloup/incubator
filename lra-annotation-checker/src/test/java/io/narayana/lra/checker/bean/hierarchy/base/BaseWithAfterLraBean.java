@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-2.1-only
  */
 
-package io.narayana.lra.checker.bean.hierarchy;
+package io.narayana.lra.checker.bean.hierarchy.base;
 
 import org.eclipse.microprofile.lra.annotation.AfterLRA;
 

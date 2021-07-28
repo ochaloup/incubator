@@ -8,12 +8,13 @@ package io.narayana.lra.checker;
 
 import io.narayana.lra.checker.failures.FailureCatalog;
 import org.apache.maven.plugin.MojoFailureException;
+import org.eclipse.microprofile.lra.tck.participant.api.AfterLRAListener;
+import org.eclipse.microprofile.lra.tck.participant.api.LRATypeTckInterface;
 import org.eclipse.microprofile.lra.tck.participant.invalid.LRAResourceWithoutCompensateOrAfteRLRA;
 import org.eclipse.microprofile.lra.tck.participant.nonjaxrs.InvalidAfterLRASignatureListener;
 import org.eclipse.microprofile.lra.tck.participant.nonjaxrs.InvalidArgumentTypesParticipant;
 import org.eclipse.microprofile.lra.tck.participant.nonjaxrs.InvalidReturnTypeParticipant;
 import org.eclipse.microprofile.lra.tck.participant.nonjaxrs.TooManyArgsParticipant;
-import org.eclipse.microprofile.lra.tck.participant.nonjaxrs.valid.ValidLRAParticipant;
 import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.junit.Assert;
 import org.junit.Before;
@@ -58,7 +59,7 @@ public class LraTCKCheckTest {
 
         return loadedClasses.stream()
                 // Filter is useful to run the test against a particular bean
-                .filter(clazz -> clazz == ValidLRAParticipant.class)
+                .filter(clazz -> clazz == AfterLRAListener.class || clazz == LRATypeTckInterface.class)
                 .map(clazz -> new Object[]{clazz})
                 .collect(Collectors.toList());
     }
