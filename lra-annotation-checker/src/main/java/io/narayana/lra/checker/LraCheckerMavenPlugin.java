@@ -152,7 +152,7 @@ public class LraCheckerMavenPlugin extends AbstractMojo {
             }
         }
 
-        CheckerUtil checkerUtil = new CheckerUtil(getLog());
+        ClassAndFilesProcessing checkerUtil = new ClassAndFilesProcessing(getLog());
         getLog().info("Loading classes from paths: " + Arrays.asList(preprocessedPaths));
 
         // say if path is directory or jar file
@@ -210,7 +210,7 @@ public class LraCheckerMavenPlugin extends AbstractMojo {
 
             if (file.isDirectory()) {
                 pathsFileMap.put(file, FileType.DIRECTORY);
-            } else if (CheckerUtil.isZipFile(file)) {
+            } else if (ClassAndFilesProcessing.isZipFile(file)) {
                 pathsFileMap.put(file, FileType.JAR);
             } else {
                 throw new MojoFailureException("Provided path '" + arg + "' is neither directory nor jar file");

@@ -35,7 +35,6 @@ import javax.ws.rs.Path;
 /**
  * {@link Leave} does not require any specific JAX-RS type.
  */
-@LRA
 public class LeaveWithoutPutBean {
     @Complete
     @Path("complete")

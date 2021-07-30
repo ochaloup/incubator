@@ -64,10 +64,13 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.narayana.lra.checker.cdi.LraAnnotationMetadata.LRA_METHOD_ANNOTATIONS;
+
 /**
  * <p>
- * This is a CDI extension which loads the annotations within the project
- * and checks whether the project does not break the rules of LRA specification.
+ * This is the annotation processing class in plugin.
+ * It's written as a CDI extension that gets all LRA annotations within the project
+ * and checks whether they break the rules of LRA specification.
  * </p>
  * <p>
  * All failures are stored under {@link FailureCatalog}.
@@ -75,9 +78,6 @@ import java.util.stream.Stream;
  */
 public class LraAnnotationProcessingExtension implements Extension {
     private static final Logger log = Logger.getLogger(LraAnnotationProcessingExtension.class);
-
-    private static final List<Class<? extends Annotation>> LRA_METHOD_ANNOTATIONS =
-            Arrays.asList(Compensate.class, Complete.class, AfterLRA.class, Forget.class, Status.class, Leave.class);
 
     <X> void processLraAnnotatedType(@Observes @WithAnnotations({LRA.class}) ProcessAnnotatedType<X> classAnnotatedWithLra) {
         log.debugf("Processing class:", classAnnotatedWithLra);
@@ -89,7 +89,6 @@ public class LraAnnotationProcessingExtension implements Extension {
             return;
         }
 
-        // All compulsory LRA annotations are available at the class
         Supplier<Stream<AnnotatedMethod<? super X>>> methodsSupplier = () -> classAnnotatedWithLra.getAnnotatedType().getMethods().stream();
         String classAnnotatedWithLraName = classAnnotated.getName();
 
@@ -113,35 +112,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .collect(Collectors.toList());
         lraAnnotations.addAll(methodLraAnnotations);
 
-        // Need to filter only to most concrete method in hierarchy
-        List<Class<?>> classHierarchy = getClassHierarchy(classAnnotated);
-        // Listing the methods of one type
-        System.out.println(">>>>>>>>>>>>>" + classHierarchy);
-        List<AnnotatedMethod<? super X>> methodsWithCompensate = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(Compensate.class))
-                .collect(Collectors.toList());
-        List<AnnotatedMethod<? super X>> methodsWithComplete = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(Complete.class))
-                .collect(Collectors.toList());
-        List<AnnotatedMethod<? super X>> methodsWithStatus = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(Status.class))
-                .collect(Collectors.toList());
-        // ------------------ ****
-        List<AnnotatedMethod<? super X>> methodsWithAfterLRA = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(AfterLRA.class))
-                .filter(m -> {
-                    List<Method> methodHierarchy = getMethodHierarchy(classHierarchy, AfterLRA.class);
-                    System.out.println(">>>> " + methodHierarchy);
-                    return !methodHierarchy.isEmpty() && m.getJavaMember().getDeclaringClass() == methodHierarchy.get(0).getDeclaringClass();
-                })
-                .collect(Collectors.toList());
-        // ------------------ ^^^^
-        List<AnnotatedMethod<? super X>> methodsWithLeave = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(Leave.class))
-                .collect(Collectors.toList());
-        List<AnnotatedMethod<? super X>> methodsWithForget = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(Forget.class))
-                .collect(Collectors.toList());
+
 
         // Only one of these annotations is permitted to be used in a class
         BiFunction<Class<?>, List<AnnotatedMethod<? super X>>, String> errorMsgMultipleAnnotations = (clazz, methods) -> String.format(
@@ -197,7 +168,7 @@ public class LraAnnotationProcessingExtension implements Extension {
         methodsWithCompensate.removeAll(methodsWithCompensateNonJaxRS);
         methodsWithCompensateNonJaxRS.stream()
                 // method signature for @Compensate: public void/CompleteStage compensate(URI lraId, URI parentId) { ...}
-                .filter(LraAnnotationProcessingExtension.checkNotPublicWithParameterTypes(URI.class, URI.class))
+                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
                         getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Compensate.class,
                                 String.format(signatureFormat, Compensate.class.getSimpleName().toLowerCase(Locale.ROOT)))));
@@ -207,7 +178,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .collect(Collectors.toList());
         methodsWithComplete.removeAll(methodsWithCompleteNonJaxRS);
         methodsWithCompleteNonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.checkNotPublicWithParameterTypes(URI.class, URI.class))
+                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
                         getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Complete.class,
                                 String.format(signatureFormat, Complete.class.getSimpleName().toLowerCase(Locale.ROOT)))));
@@ -217,7 +188,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .collect(Collectors.toList());
         methodsWithStatus.removeAll(methodsWithStatusNonJaxRS);
         methodsWithStatusNonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.checkNotPublicWithParameterTypes(URI.class, URI.class))
+                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
                         getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Status.class,
                                 String.format(signatureFormat, Status.class.getSimpleName().toLowerCase(Locale.ROOT)))));
@@ -228,7 +199,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .collect(Collectors.toList());
         methodsWithAfterLRANonJaxRS.forEach(methodsWithAfterLRA::remove);
         methodsWithAfterLRANonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.checkNotPublicWithParameterTypes(URI.class, LRAStatus.class))
+                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, LRAStatus.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
                         getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), AfterLRA.class,
                                 String.format(signatureFormat, AfterLRA.class.getSimpleName().toLowerCase(Locale.ROOT)))));
@@ -239,7 +210,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .collect(Collectors.toList());
         methodsWithForget.removeAll(methodsWithForgetNonJaxRS);
         methodsWithForgetNonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.checkNotPublicWithParameterTypes(URI.class, URI.class))
+                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
                         getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Forget.class,
                                 String.format(signatureFormat, Forget.class.getSimpleName().toLowerCase(Locale.ROOT)))));
@@ -355,41 +326,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 lraTypeAnnotation.getName(), clazz.getName(), method.getJavaMember().getName(), correctSignature);
     }
 
-    private static List<Class<?>> getClassHierarchy(Class<?> childClass) {
-        List<Class<?>> classHierarchy = new ArrayList<>();
-        if (childClass == null) return classHierarchy;
-        Class<?> classToAdd = childClass;
-        while (classToAdd != null) {
-            classHierarchy.add(classToAdd);
-            classToAdd = classToAdd.getSuperclass();
-        }
-        return classHierarchy;
-    }
-
-    private static List<Method> getMethodHierarchy(final List<Class<?>> classHierarchy, final Class<? extends Annotation> annotationClass) {
-        List<Method> list = new ArrayList<>();
-        for (Class<?> clazz: classHierarchy) {
-            // System.out.println("C: " + clazz +", ann class: " + annotationClass); TODO: deleete me
-            for(Method m: clazz.getMethods()) {
-                // System.out.println(" M: " + m + ", " + Arrays.asList(m.getAnnotations())); // TODO: delete me
-                if(Arrays.stream(m.getAnnotations()).anyMatch(a -> a.annotationType()== annotationClass)) {
-                    list.add(m);
-                }
-            }
-        }
-        return list;
-    }
-
-    static final class MethodHolder<X> {
-        final AnnotatedMethod<? super X> method;
-        final Class<?> classWhereMethodIsFirstDeclaredInHierarchy;
-        MethodHolder(AnnotatedMethod<? super X> method, Class<?> firstInHierarchyClass) {
-            this.method = method;
-            this.classWhereMethodIsFirstDeclaredInHierarchy = firstInHierarchyClass;
-        }
-    }
-
-    private static Predicate<AnnotatedMethod<?>> checkNotPublicWithParameterTypes(Class<?>... clazzes) {
+    private static Predicate<AnnotatedMethod<?>> createNonJaxRsMethodSignatureChecker(Class<?>... expectedParameterTypes) {
         return method -> {
             // when the method is not public
             if (!Modifier.isPublic(method.getJavaMember().getModifiers())) {
@@ -397,16 +334,16 @@ public class LraAnnotationProcessingExtension implements Extension {
             }
             Class<?>[] parameterTypes = method.getJavaMember().getParameterTypes();
             // some number of parameters are considered but there is no parameter provided in method declaration then fail
-            if (clazzes.length > 0 && method.getJavaMember().getParameterCount() == 0) {
+            if (expectedParameterTypes.length > 0 && method.getJavaMember().getParameterCount() == 0) {
                 return true;
             }
             // if number of declared parameters is bigger than the expected number of paramters
-            if (method.getJavaMember().getParameterCount() > clazzes.length) {
+            if (method.getJavaMember().getParameterCount() > expectedParameterTypes.length) {
                 return true;
             }
             // the number of declared method parameters do not need to match but those provided have to be of same type
             for (int i = 0; i < method.getJavaMember().getParameterCount(); i++) {
-                if(!clazzes[i].isAssignableFrom(parameterTypes[i])) return true; // one of the parameter types does not match
+                if(!expectedParameterTypes[i].isAssignableFrom(parameterTypes[i])) return true; // one of the parameter types does not match
             }
             // return type is is one of Void, CompletionStage, ParticipantStatus or Response
             if (!method.getJavaMember().getReturnType().equals(Void.TYPE)

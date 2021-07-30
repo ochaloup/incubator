@@ -43,10 +43,10 @@ import org.apache.maven.plugin.logging.Log;
  * Utility class used for loading classes to be then used
  * for creating synthetic bean archive for Weld
  */
-final class CheckerUtil {
+final class ClassAndFilesProcessing {
     private final Log mavenLog;
 
-    CheckerUtil(Log mavenLog) {
+    ClassAndFilesProcessing(Log mavenLog) {
         this.mavenLog = mavenLog;
     }
 
