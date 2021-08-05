@@ -22,6 +22,7 @@
 
 package io.narayana.lra.checker.cdi;
 
+import com.google.common.collect.Maps;
 import io.narayana.lra.checker.failures.ErrorCode;
 import io.narayana.lra.checker.failures.FailureCatalog;
 import jakarta.enterprise.event.Observes;
@@ -53,8 +54,10 @@ import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.function.BiFunction;
@@ -82,7 +85,7 @@ public class LraAnnotationProcessingExtension implements Extension {
     <X> void processLraAnnotatedType(@Observes @WithAnnotations({LRA.class}) ProcessAnnotatedType<X> classAnnotatedWithLra) {
         log.debugf("Processing class:", classAnnotatedWithLra);
 
-        // Let's working only with instantiable classes - no abstract, no interface
+        // Let working only with instantiable classes - no abstract, no interface
         Class<?> classAnnotated = classAnnotatedWithLra.getAnnotatedType().getJavaClass();
         if (classAnnotated.isAnnotation() || classAnnotated.isEnum() || classAnnotated.isInterface() || Modifier.isAbstract(classAnnotated.getModifiers())) {
             log.debugf("Skipping class: %s as it's not standard instantiable class", classAnnotatedWithLra);
@@ -98,53 +101,24 @@ public class LraAnnotationProcessingExtension implements Extension {
                     "Class: " + classAnnotatedWithLraName);
         }
 
-        // Gathering all LRA annotations in the class
-        List<LRA> lraAnnotations = new ArrayList<>();
-        // Class level LRA annotation (it can be only one)
-        LRA classLraAnnotation = classAnnotatedWithLra.getAnnotatedType().getAnnotation(LRA.class);
-        if (classLraAnnotation != null) {
-            lraAnnotations.add(classLraAnnotation);
-        }
-        // Method level LRA annotations
-        List<LRA> methodLraAnnotations = methodsSupplier.get()
-                .filter(m -> m.isAnnotationPresent(LRA.class))
-                .map(m -> m.getAnnotation(LRA.class))
-                .collect(Collectors.toList());
-        lraAnnotations.addAll(methodLraAnnotations);
-
-
+        LraAnnotationMetadata metadata = LraAnnotationMetadata.loadMetadata(classAnnotatedWithLra.getAnnotatedType());
 
         // Only one of these annotations is permitted to be used in a class
-        BiFunction<Class<?>, List<AnnotatedMethod<? super X>>, String> errorMsgMultipleAnnotations = (clazz, methods) -> String.format(
+        BiFunction<Class<? extends Annotation>, List<AnnotatedMethod<? super X>>, String> multipleAnnotationsErrorDetailsPrinter = (clazz, methods) -> String.format(
                 "Multiple annotations '%s' in the class '%s' on methods %s.",
                 clazz.getName(), classAnnotatedWithLraName,
                 methods.stream().map(a -> a.getJavaMember().getName()).collect(Collectors.toList()));
-        if (methodsWithCompensate.size() > 1) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                    errorMsgMultipleAnnotations.apply(Compensate.class, methodsWithCompensate));
-        }
-        if (methodsWithComplete.size() > 1) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                    errorMsgMultipleAnnotations.apply(Complete.class, methodsWithComplete));
-        }
-        if (methodsWithAfterLRA.size() > 1) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                    errorMsgMultipleAnnotations.apply(AfterLRA.class, methodsWithLeave));
-        }
-        if (methodsWithForget.size() > 1) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                    errorMsgMultipleAnnotations.apply(Forget.class, methodsWithForget));
-        }
-        // Considering the @Status and @Leave may be used multiple times within one class
-        // but the spec does not declare the rules for it in particular
-        if (methodsWithStatus.size() > 1) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                    errorMsgMultipleAnnotations.apply(Status.class, methodsWithStatus));
-        }
-        if (methodsWithLeave.size() > 1) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                    errorMsgMultipleAnnotations.apply(Leave.class, methodsWithLeave));
-        }
+        LRA_METHOD_ANNOTATIONS.stream()
+                // Considering the @Status and @Leave may be used multiple times within one class (spec says nothing in particular on this)
+                .filter(clazz -> clazz == clazz )
+                .map(lraClass ->
+                    new HashMap<Class<? extends Annotation>, List<AnnotatedMethod<? super X>>>() {{
+                      put(lraClass, metadata.getDeclaredMethods(lraClass));
+                    }}
+                )
+                .filter(m -> m.values().iterator().next().size() > 1)
+                .forEach(m -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
+                        multipleAnnotationsErrorDetailsPrinter.apply(m.keySet().iterator().next(), m.values().iterator().next())));
 
         // Multiple different LRA annotations at the same method does not make sense
         Set<Set<Class<? extends Annotation>>> lraAnnotationsCombination = LRA_METHOD_ANNOTATIONS.stream()
