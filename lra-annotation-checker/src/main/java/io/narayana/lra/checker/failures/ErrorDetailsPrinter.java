@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright The Narayana Authors
  *
  * SPDX-License-Identifier: LGPL-2.1-only
@@ -6,11 +6,9 @@
 
 package io.narayana.lra.checker.failures;
 
-import io.narayana.lra.checker.common.Tuple;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiFunction;
@@ -49,13 +47,6 @@ public final class ErrorDetailsPrinter {
                 String.format("Method '%s' of class '%s' annotated with '%s' misses complementary annotation %s.",
                     method.getJavaMember().getName(), method.getJavaMember().getDeclaringClass(),
                         lraAnnotation.getName(), missingAnnotation.getName());
-
-    public static final BiFunction<AnnotatedMethod<?>, Class<? extends Annotation>, String> MISSING_SUSPEND_CALLBACK =
-            (method, lraAnnotation) ->
-                    String.format("Method '%s' of class '%s' annotated with '%s' is defined being asynchronous via @Suspend parameter annotation. " +
-                            "The LRA class has to contain @Status and @Forget annotations to activate such handling.",
-                            method.getJavaMember().getName(), method.getJavaMember().getDeclaringClass().getName(),
-                            lraAnnotation.getName());
 
     private static List<String> toMethodNames(List<AnnotatedMethod<?>> annotatedMethods) {
         return annotatedMethods.stream().map(a -> a.getJavaMember().getName()).collect(Collectors.toList());

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright The Narayana Authors
  *
  * SPDX-License-Identifier: LGPL-2.1-only

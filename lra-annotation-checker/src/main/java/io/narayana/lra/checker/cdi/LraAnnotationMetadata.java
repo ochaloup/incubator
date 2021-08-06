@@ -40,7 +40,6 @@ public final class LraAnnotationMetadata<X> {
 
     // class with @LRA
     private final AnnotatedType<X> lraAnnotatedType;
-    private final Class<X> lraAnnotatedCass;
     // class hierarchy of the class with @LRA
     private final List<Class<? super X>> classHierarchy;
     // LRA callback methods
@@ -48,14 +47,13 @@ public final class LraAnnotationMetadata<X> {
     private final Map<Class<? extends Annotation>, List<AnnotatedMethod<?>>> annotatedMethods;
 
     static <X> LraAnnotationMetadata<X> loadMetadata(final AnnotatedType<X> lraAnnotatedClass) {
-        return new LraAnnotationMetadata<X>(lraAnnotatedClass);
+        return new LraAnnotationMetadata<>(lraAnnotatedClass);
     }
 
     private LraAnnotationMetadata(final AnnotatedType<X> lraAnnotatedType) {
         Objects.requireNonNull(lraAnnotatedType);
         this.lraAnnotatedType = lraAnnotatedType;
-        this.lraAnnotatedCass = lraAnnotatedType.getJavaClass();
-        this.classHierarchy = getClassHierarchy(lraAnnotatedCass);
+        this.classHierarchy = getClassHierarchy(lraAnnotatedType.getJavaClass());
 
         annotatedMethods = LRA_METHOD_ANNOTATIONS.stream()
                 .collect(Collectors.toMap(Function.identity(), this::getMethodsForAnnotation));
@@ -83,7 +81,7 @@ public final class LraAnnotationMetadata<X> {
      * (i.e., the method does not define the {@link javax.ws.rs.Path} as a compound annotation).
      */
     List<AnnotatedMethod<?>> getAnnotatedNonJaxRsMethods(final Class<? extends Annotation> lraAnnotation) {
-        return getAnnotatedFilteredMethods(lraAnnotation, true);
+        return getAnnotatedFilteredMethods(lraAnnotation, false);
     }
 
     private List<AnnotatedMethod<?>> getAnnotatedFilteredMethods(final Class<? extends Annotation> lraAnnotation, boolean isJaxRs) {
@@ -142,9 +140,7 @@ public final class LraAnnotationMetadata<X> {
     private Optional<AnnotatedMethod<? super X>> getMostConcreteMethodForAnnotation(final Class<? extends Annotation> annotationClass) {
         Optional<Method> mostConcreteAnnotatedMethod = getMethodHierarchy(classHierarchy, annotationClass).stream().findFirst();
         return getMethodsForAnnotationStream(annotationClass)
-                .filter(m -> {
-                    return !mostConcreteAnnotatedMethod.isPresent() && m.getJavaMember().getDeclaringClass() == mostConcreteAnnotatedMethod.get().getDeclaringClass();
-                })
+                .filter(m -> mostConcreteAnnotatedMethod.isPresent() && m.getJavaMember().getDeclaringClass() == mostConcreteAnnotatedMethod.get().getDeclaringClass())
                 .findFirst();
     }
 

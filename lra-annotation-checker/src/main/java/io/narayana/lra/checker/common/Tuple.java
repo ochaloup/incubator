@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright The Narayana Authors
  *
  * SPDX-License-Identifier: LGPL-2.1-only
@@ -11,7 +11,7 @@ public final class Tuple<X,Y> {
     final Y value;
 
     public static <X,Y> Tuple<X,Y> of(X key, Y value) {
-        return new Tuple<X,Y>(key, value);
+        return new Tuple<>(key, value);
     }
 
     public Tuple(X key, Y value) {

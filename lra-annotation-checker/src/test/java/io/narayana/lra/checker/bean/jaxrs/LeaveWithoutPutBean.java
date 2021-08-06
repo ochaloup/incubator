@@ -24,9 +24,8 @@ package io.narayana.lra.checker.bean.jaxrs;
 
 import org.eclipse.microprofile.lra.annotation.Compensate;
 import org.eclipse.microprofile.lra.annotation.Complete;
-import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
-import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 import org.eclipse.microprofile.lra.annotation.Status;
+import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;

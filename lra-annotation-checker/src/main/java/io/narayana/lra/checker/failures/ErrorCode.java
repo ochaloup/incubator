@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright The Narayana Authors
  *
  * SPDX-License-Identifier: LGPL-2.1-only
@@ -25,7 +25,7 @@ public enum ErrorCode {
     private final int code;
     private final String description;
 
-    private ErrorCode(int code, String description) {
+    ErrorCode(int code, String description) {
         this.code = code;
         this.description = description;
     }

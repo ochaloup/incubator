@@ -36,21 +36,6 @@ public enum FailureCatalog {
     private final List<Failure> failureCatalog = Collections.synchronizedList(new ArrayList<>());
 
     /**
-     * Adding a failure string under the list of failures represented by this catalog.
-     */
-    private void add(String failureDescription) {
-        failureCatalog.add(Failure.instance(failureDescription));
-    }
-
-    /**
-     * Adding a failure string under the list of failures represented by this catalog. No error code is used.
-     * The format of {@link String#format(String, Object...)} is expected.
-     */
-    private void add(String format, Object... params) {
-        failureCatalog.add(Failure.instance(String.format(format, params)));
-    }
-
-    /**
      * Adding a failure string under the list of failures represented by this catalog with a known error code.
      * The format of {@link String#format(String, Object...)} is expected.
      */

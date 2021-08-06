@@ -177,9 +177,9 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
                         ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Leave.class, PUT.class)));
         // @Forget - requires @DELETE
-        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Leave.class, DELETE.class)
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Forget.class, DELETE.class)
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
-                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Leave.class, DELETE.class)));
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Forget.class, DELETE.class)));
     }
 
     private <X> void checkSuspendedAsync(LraAnnotationMetadata<X> metadata, Class<? extends Annotation> lraAnnotation) {
