@@ -22,8 +22,9 @@
 
 package io.narayana.lra.checker.cdi;
 
-import com.google.common.collect.Maps;
+import io.narayana.lra.checker.common.Tuple;
 import io.narayana.lra.checker.failures.ErrorCode;
+import io.narayana.lra.checker.failures.ErrorDetailsPrinter;
 import io.narayana.lra.checker.failures.FailureCatalog;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
@@ -49,18 +50,12 @@ import javax.ws.rs.Path;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -103,22 +98,14 @@ public class LraAnnotationProcessingExtension implements Extension {
 
         LraAnnotationMetadata metadata = LraAnnotationMetadata.loadMetadata(classAnnotatedWithLra.getAnnotatedType());
 
-        // Only one of these annotations is permitted to be used in a class
-        BiFunction<Class<? extends Annotation>, List<AnnotatedMethod<? super X>>, String> multipleAnnotationsErrorDetailsPrinter = (clazz, methods) -> String.format(
-                "Multiple annotations '%s' in the class '%s' on methods %s.",
-                clazz.getName(), classAnnotatedWithLraName,
-                methods.stream().map(a -> a.getJavaMember().getName()).collect(Collectors.toList()));
+        // Only one of these annotations is permitted in a class
         LRA_METHOD_ANNOTATIONS.stream()
-                // Considering the @Status and @Leave may be used multiple times within one class (spec says nothing in particular on this)
+                // @Status and @Leave may be used multiple times within one class (spec says nothing in particular on this)
                 .filter(clazz -> clazz == clazz )
-                .map(lraClass ->
-                    new HashMap<Class<? extends Annotation>, List<AnnotatedMethod<? super X>>>() {{
-                      put(lraClass, metadata.getDeclaredMethods(lraClass));
-                    }}
-                )
-                .filter(m -> m.values().iterator().next().size() > 1)
-                .forEach(m -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                        multipleAnnotationsErrorDetailsPrinter.apply(m.keySet().iterator().next(), m.values().iterator().next())));
+                .map(lraClass -> Tuple.of(lraClass, metadata.getDeclaredMethods(lraClass)))
+                .filter(t -> t.getValue().size() > 1) // multiple methods for the annotation was found
+                .forEach(t -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
+                        ErrorDetailsPrinter.MULTIPLE_ANNOTATIONS_TUP.apply(classAnnotated).apply(t)));
 
         // Multiple different LRA annotations at the same method does not make sense
         Set<Set<Class<? extends Annotation>>> lraAnnotationsCombination = LRA_METHOD_ANNOTATIONS.stream()
