@@ -50,6 +50,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.List;
@@ -81,7 +82,7 @@ public class LraAnnotationProcessingExtension implements Extension {
         log.debugf("Processing class:", classAnnotatedWithLra);
 
         // Let working only with instantiable classes - no abstract, no interface
-        Class<?> classAnnotated = classAnnotatedWithLra.getAnnotatedType().getJavaClass();
+        Class<X> classAnnotated = classAnnotatedWithLra.getAnnotatedType().getJavaClass();
         if (classAnnotated.isAnnotation() || classAnnotated.isEnum() || classAnnotated.isInterface() || Modifier.isAbstract(classAnnotated.getModifiers())) {
             log.debugf("Skipping class: %s as it's not standard instantiable class", classAnnotatedWithLra);
             return;
@@ -96,7 +97,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                     "Class: " + classAnnotatedWithLraName);
         }
 
-        LraAnnotationMetadata metadata = LraAnnotationMetadata.loadMetadata(classAnnotatedWithLra.getAnnotatedType());
+        LraAnnotationMetadata<X> metadata = LraAnnotationMetadata.loadMetadata(classAnnotatedWithLra.getAnnotatedType());
 
         // Only one of these annotations is permitted in a class
         LRA_METHOD_ANNOTATIONS.stream()
@@ -105,7 +106,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .map(lraClass -> Tuple.of(lraClass, metadata.getDeclaredMethods(lraClass)))
                 .filter(t -> t.getValue().size() > 1) // multiple methods for the annotation was found
                 .forEach(t -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
-                        ErrorDetailsPrinter.MULTIPLE_ANNOTATIONS_TUP.apply(classAnnotated).apply(t)));
+                        ErrorDetailsPrinter.MULTIPLE_ANNOTATIONS.apply(classAnnotated).apply(t.getKey(), t.getValue())));
 
         // Multiple different LRA annotations at the same method does not make sense
         Set<Set<Class<? extends Annotation>>> lraAnnotationsCombination = LRA_METHOD_ANNOTATIONS.stream()

@@ -26,9 +26,6 @@ public final class ErrorDetailsPrinter {
                     String.format(
                         "Multiple annotations '%s' in the class '%s' on methods %s.",
                         clazz.getName(), annotatedLraClass, toMethodNames(methods));
-    public static Function<Class<?>, Function<Tuple<Class<? extends Annotation>, List<AnnotatedMethod<?>>>, String>> MULTIPLE_ANNOTATIONS_TUP =
-            annotatedLraClass -> tuple->
-                    MULTIPLE_ANNOTATIONS.apply(annotatedLraClass).apply(tuple.getKey(), tuple.getValue());
 
     private static List<String> toMethodNames(List<AnnotatedMethod<?>> annotatedMethods) {
         return annotatedMethods.stream().map(a -> a.getJavaMember().getName()).collect(Collectors.toList());

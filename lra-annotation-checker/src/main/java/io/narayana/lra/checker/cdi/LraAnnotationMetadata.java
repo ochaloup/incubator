@@ -44,10 +44,10 @@ public final class LraAnnotationMetadata<X> {
     private final List<Class<? super X>> classHierarchy;
     // LRA callback methods
     private final Map<Class<? extends Annotation>, Optional<AnnotatedMethod<? super X>>> activeMethods;
-    private final Map<Class<? extends Annotation>, List<AnnotatedMethod<? super X>>> declaredMethods;
+    private final Map<Class<? extends Annotation>, List<AnnotatedMethod<?>>> declaredMethods;
 
-    static <X> LraAnnotationMetadata loadMetadata(final AnnotatedType<X> lraAnnotatedClass) {
-        return new LraAnnotationMetadata<>(lraAnnotatedClass);
+    static <X> LraAnnotationMetadata<X> loadMetadata(final AnnotatedType<X> lraAnnotatedClass) {
+        return new LraAnnotationMetadata<X>(lraAnnotatedClass);
     }
 
     private LraAnnotationMetadata(final AnnotatedType<X> lraAnnotatedType) {
@@ -65,7 +65,7 @@ public final class LraAnnotationMetadata<X> {
     /**
      * Returns all methods in the type hierarchy that are annotated with the annotation.
      */
-    List<AnnotatedMethod<? super X>> getDeclaredMethods(final Class<? extends Annotation> annotationClass) {
+    List<AnnotatedMethod<?>> getDeclaredMethods(final Class<? extends Annotation> annotationClass) {
         return declaredMethods.get(annotationClass);
     }
 
@@ -127,7 +127,7 @@ public final class LraAnnotationMetadata<X> {
                 .filter(m -> m.isAnnotationPresent(annotationClass));
     }
 
-    private List<AnnotatedMethod<? super X>> getDeclaredMethodsForAnnotation(final Class<? extends Annotation> annotationClass) {
+    private List<AnnotatedMethod<?>> getDeclaredMethodsForAnnotation(final Class<? extends Annotation> annotationClass) {
         return getDeclaredMethodsForAnnotationStream(annotationClass)
                 .collect(Collectors.toList());
     }
