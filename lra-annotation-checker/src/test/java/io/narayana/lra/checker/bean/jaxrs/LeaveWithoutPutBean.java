@@ -25,6 +25,7 @@ package io.narayana.lra.checker.bean.jaxrs;
 import org.eclipse.microprofile.lra.annotation.Compensate;
 import org.eclipse.microprofile.lra.annotation.Complete;
 import org.eclipse.microprofile.lra.annotation.Status;
+import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 
 import javax.ws.rs.GET;
@@ -35,6 +36,11 @@ import javax.ws.rs.Path;
  * {@link Leave} does not require any specific JAX-RS type.
  */
 public class LeaveWithoutPutBean {
+    @LRA
+    public void process() {
+        // not implementation needed
+    }
+
     @Complete
     @Path("complete")
     @PUT
@@ -57,6 +63,7 @@ public class LeaveWithoutPutBean {
     }
 
     @Leave
+    @Path("leave")
     public void leave() {
         // no implementation needed
     }

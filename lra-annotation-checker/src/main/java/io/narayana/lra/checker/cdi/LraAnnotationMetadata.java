@@ -6,6 +6,7 @@
 
 package io.narayana.lra.checker.cdi;
 
+import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import org.eclipse.microprofile.lra.annotation.AfterLRA;
@@ -13,6 +14,7 @@ import org.eclipse.microprofile.lra.annotation.Compensate;
 import org.eclipse.microprofile.lra.annotation.Complete;
 import org.eclipse.microprofile.lra.annotation.Forget;
 import org.eclipse.microprofile.lra.annotation.Status;
+import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 
 import javax.ws.rs.Path;
@@ -42,9 +44,10 @@ public final class LraAnnotationMetadata<X> {
     private final AnnotatedType<X> lraAnnotatedType;
     // class hierarchy of the class with @LRA
     private final List<Class<? super X>> classHierarchy;
-    // LRA callback methods
-    private final Map<Class<? extends Annotation>, Optional<AnnotatedMethod<? super X>>> mostConcreteActiveMethods;
+    // LRA annotated methods
+    private final List<Annotated> listOfLRAAnnotated = new ArrayList<>();
     private final Map<Class<? extends Annotation>, List<AnnotatedMethod<?>>> annotatedMethods;
+    private final Map<Class<? extends Annotation>, List<AnnotatedMethod<?>>> mostConcreteAnnotatedMethods;
 
     static <X> LraAnnotationMetadata<X> loadMetadata(final AnnotatedType<X> lraAnnotatedClass) {
         return new LraAnnotationMetadata<>(lraAnnotatedClass);
@@ -55,10 +58,29 @@ public final class LraAnnotationMetadata<X> {
         this.lraAnnotatedType = lraAnnotatedType;
         this.classHierarchy = getClassHierarchy(lraAnnotatedType.getJavaClass());
 
+        if (!lraAnnotatedType.getAnnotations(LRA.class).isEmpty()) {
+            listOfLRAAnnotated.add(lraAnnotatedType);
+        }
+        listOfLRAAnnotated.addAll(this.getMethodsForAnnotation(LRA.class));
+
         annotatedMethods = LRA_METHOD_ANNOTATIONS.stream()
                 .collect(Collectors.toMap(Function.identity(), this::getMethodsForAnnotation));
-        mostConcreteActiveMethods = LRA_METHOD_ANNOTATIONS.stream()
+        mostConcreteAnnotatedMethods = LRA_METHOD_ANNOTATIONS.stream()
                 .collect(Collectors.toMap(Function.identity(), this::getMostConcreteMethodForAnnotation));
+    }
+
+    /**
+     * Get all annotated members that contains {@link LRA} annotation.
+     */
+    List<Annotated> getLRAAnnotated() {
+        return listOfLRAAnnotated;
+    }
+
+    /**
+     * Returns true if the type contains some LRA callback annotation.
+     */
+    boolean containsAnLRAMethodCallbackAnnotation() {
+        return LRA_METHOD_ANNOTATIONS.stream().noneMatch(a -> getAnnotatedMethods(a).isEmpty());
     }
 
     /**
@@ -66,6 +88,15 @@ public final class LraAnnotationMetadata<X> {
      */
     List<AnnotatedMethod<?>> getAnnotatedMethods(final Class<? extends Annotation> annotationClass) {
         return annotatedMethods.get(annotationClass);
+    }
+
+    /**
+     * Based on the class hierarchy it finds the most concrete LRA callbacks, i.e.,
+     * class A is a parent of class B, both declares @AfterLRA annotation, only method from B will be returned here.
+     * When the class hierarchy does *not* define a method for the annotation then empty {@link List} is returned.
+     */
+    List<AnnotatedMethod<?>> getAnnotatedMethodsFilteredToMostConcrete(final Class<? extends Annotation> annotationClass) {
+        return mostConcreteAnnotatedMethods.get(annotationClass);
     }
 
     /**
@@ -133,15 +164,15 @@ public final class LraAnnotationMetadata<X> {
     }
 
     /**
-     * Based on the class hierarchy it finds the most concrete LRA callback, i.e.,
+     * Based on the class hierarchy it finds the most concrete LRA callbacks, i.e.,
      * class A is a parent of class B, both declares @AfterLRA annotation, only method from B will be returned here.
-     * When the class hierarchy does *not* define a method for the annotation then empty {@link Optional} is returned.
+     * When the class hierarchy does *not* define a method for the annotation then empty {@link List} is returned.
      */
-    private Optional<AnnotatedMethod<? super X>> getMostConcreteMethodForAnnotation(final Class<? extends Annotation> annotationClass) {
+    private List<AnnotatedMethod<?>> getMostConcreteMethodForAnnotation(final Class<? extends Annotation> annotationClass) {
         Optional<Method> mostConcreteAnnotatedMethod = getMethodHierarchy(classHierarchy, annotationClass).stream().findFirst();
         return getMethodsForAnnotationStream(annotationClass)
                 .filter(m -> mostConcreteAnnotatedMethod.isPresent() && m.getJavaMember().getDeclaringClass() == mostConcreteAnnotatedMethod.get().getDeclaringClass())
-                .findFirst();
+                .collect(Collectors.toList());
     }
 
     /**

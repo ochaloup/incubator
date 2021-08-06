@@ -20,7 +20,8 @@ public enum ErrorCode {
     WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE(4, "Wrong method signature for non JAX-RS resource method."),
     WRONG_JAXRS_COMPLEMENTARY_ANNOTATION(5, "Wrong complementary annotation of JAX-RS resource method."),
     MISSING_SUSPEND_ASYNC_CALLBACK(6, "Asynchronous method with @Suspend parameter annotation defined. " +
-            "While the LRA class does not contain @Status and @Forget annotations to activate such handling.");
+            "While the LRA class does not contain @Status and @Forget annotations to activate such handling."),
+    NO_LRA(7, "Type contains a LRA callback annotation but no @LRA.");
 
     private final int code;
     private final String description;

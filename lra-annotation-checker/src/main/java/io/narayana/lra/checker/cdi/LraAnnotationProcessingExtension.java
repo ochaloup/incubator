@@ -30,7 +30,6 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
-import jakarta.enterprise.inject.spi.WithAnnotations;
 import org.eclipse.microprofile.lra.annotation.AfterLRA;
 import org.eclipse.microprofile.lra.annotation.Compensate;
 import org.eclipse.microprofile.lra.annotation.Complete;
@@ -38,7 +37,6 @@ import org.eclipse.microprofile.lra.annotation.Forget;
 import org.eclipse.microprofile.lra.annotation.LRAStatus;
 import org.eclipse.microprofile.lra.annotation.ParticipantStatus;
 import org.eclipse.microprofile.lra.annotation.Status;
-import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 import org.jboss.logging.Logger;
 import org.jboss.weld.util.collections.Sets;
@@ -73,20 +71,29 @@ import static io.narayana.lra.checker.cdi.LraAnnotationMetadata.LRA_METHOD_ANNOT
 public class LraAnnotationProcessingExtension implements Extension {
     private static final Logger log = Logger.getLogger(LraAnnotationProcessingExtension.class);
 
-    <X> void processLraAnnotatedType(@Observes @WithAnnotations({LRA.class}) ProcessAnnotatedType<X> classAnnotatedWithLra) {
-        log.debugf("Processing class:", classAnnotatedWithLra);
+    <X> void processLraAnnotatedType(@Observes ProcessAnnotatedType<X> cdiAnnotatedType) {
+        log.debugf("Processing class:", cdiAnnotatedType);
 
         // LRA works only with instantiable classes - no abstract, no interface
-        Class<X> classAnnotated = classAnnotatedWithLra.getAnnotatedType().getJavaClass();
+        Class<X> classAnnotated = cdiAnnotatedType.getAnnotatedType().getJavaClass();
         if (classAnnotated.isAnnotation() || classAnnotated.isEnum() || classAnnotated.isInterface() || Modifier.isAbstract(classAnnotated.getModifiers())) {
-            log.debugf("Skipping class: %s as it's not standard instantiable class", classAnnotatedWithLra);
+            log.debugf("Skipping class: %s as it's not standard instantiable class", cdiAnnotatedType);
             return;
         }
 
-        // Processing through the LRA class and collecting data
-        LraAnnotationMetadata<X> metadata = LraAnnotationMetadata.loadMetadata(classAnnotatedWithLra.getAnnotatedType());
+        // Processing through the class and collecting data of LRA annotations
+        LraAnnotationMetadata<X> metadata = LraAnnotationMetadata.loadMetadata(cdiAnnotatedType.getAnnotatedType());
 
-        // LRA class has to contain @Compensate or @AfterLRA
+        // Verify if the type is annotated with @LRA and contains some LRA callback annotations
+        if (metadata.containsAnLRAMethodCallbackAnnotation() && metadata.getLRAAnnotated().isEmpty()) {
+            FailureCatalog.INSTANCE.add(ErrorCode.NO_LRA, "Type: " + classAnnotated);
+        }
+        if (metadata.getLRAAnnotated().isEmpty()) {
+            log.debugf("Not an LRA type: " + classAnnotated);
+            return;
+        }
+
+        // LRA type has to contain @Compensate or @AfterLRA
         if (metadata.getAnnotatedMethods(Compensate.class).isEmpty() && metadata.getAnnotatedMethods(AfterLRA.class).isEmpty()) {
             FailureCatalog.INSTANCE.add(ErrorCode.MISSING_ANNOTATIONS_COMPENSATE_AFTER_LRA,
                     "Class: " + classAnnotated.getName());
@@ -96,7 +103,7 @@ public class LraAnnotationProcessingExtension implements Extension {
         LRA_METHOD_ANNOTATIONS.stream()
                 // @Status and @Leave could be (maybe) used multiple times within one class (spec says nothing in particular)
                 .filter(clazz -> clazz == clazz )
-                .map(lraAnnotation -> Tuple.of(lraAnnotation, metadata.getAnnotatedMethods(lraAnnotation)))
+                .map(lraAnnotation -> Tuple.of(lraAnnotation, metadata.getAnnotatedMethodsFilteredToMostConcrete(lraAnnotation)))
                 .filter(t -> t.getValue().size() > 1) // multiple methods for the annotation was found
                 .forEach(t -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
                         ErrorDetailsPrinter.MULTIPLE_ANNOTATIONS.apply(classAnnotated).apply(t.getKey(), t.getValue())));
@@ -108,7 +115,7 @@ public class LraAnnotationProcessingExtension implements Extension {
                 .filter(s -> s.size() == 2) // filtering a set of one member, get rid of combinations of two same annotations
                 .collect(Collectors.toSet());
         // processing all active methods and marking wrong any annotated with the combination of any two LRA annotations
-        classAnnotatedWithLra.getAnnotatedType().getMethods().stream().filter(method -> lraAnnotationsCombination.stream()
+        cdiAnnotatedType.getAnnotatedType().getMethods().stream().filter(method -> lraAnnotationsCombination.stream()
                 .anyMatch(annotationSet -> annotationSet.stream().allMatch(method::isAnnotationPresent)))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_VARIOUS_TYPES,
                         ErrorDetailsPrinter.METHOD_INFO.apply(method)));
