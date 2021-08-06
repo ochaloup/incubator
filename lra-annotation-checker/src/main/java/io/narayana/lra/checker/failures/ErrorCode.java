@@ -18,7 +18,9 @@ public enum ErrorCode {
     MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE(2, "Multiple annotations of the same type is used. Only one per the class is expected."),
     MULTIPLE_ANNOTATIONS_OF_VARIOUS_TYPES(3, "Makes no sense to declare multiple LRA annotations of different types at method."),
     WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE(4, "Wrong method signature for non JAX-RS resource method."),
-    WRONG_JAXRS_COMPLEMENTARY_ANNOTATION(5, "Wrong complementary annotation of JAX-RS resource method.");
+    WRONG_JAXRS_COMPLEMENTARY_ANNOTATION(5, "Wrong complementary annotation of JAX-RS resource method."),
+    MISSING_SUSPEND_ASYNC_CALLBACK(6, "Asynchronous method with @Suspend parameter annotation defined. " +
+            "While the LRA class does not contain @Status and @Forget annotations to activate such handling.");
 
     private final int code;
     private final String description;

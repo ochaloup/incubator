@@ -52,13 +52,9 @@ import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
 import java.net.URI;
-import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -118,174 +114,85 @@ public class LraAnnotationProcessingExtension implements Extension {
                         ErrorDetailsPrinter.METHOD_INFO.apply(method)));
 
         // -------------------------------------------------------------------------------------------
-        // CDI style methods does not require @Path/@<method> but requires particular method signature
-        // compensate
-        final String signatureFormat = "public void/CompletionStage/ParticipantStatus %s(java.net.URI lraId, java.net.URI parentId)";
-        List<AnnotatedMethod<? super X>> methodsWithCompensateNonJaxRS = methodsWithCompensate.stream()
-                .filter(method -> !method.isAnnotationPresent(Path.class)) // it's not a REST method, checking on @Path(!?)
-                .collect(Collectors.toList());
-        methodsWithCompensate.removeAll(methodsWithCompensateNonJaxRS);
-        methodsWithCompensateNonJaxRS.stream()
+        // non-JAX-RS (CDI) style methods does not require @Path/@<method> but requires particular method signature
+        metadata.getAnnotatedNonJaxRsMethods(Compensate.class).stream()
                 // method signature for @Compensate: public void/CompleteStage compensate(URI lraId, URI parentId) { ...}
-                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
+                .filter(LraAnnotationProcessingExtension.methodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
-                        getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Compensate.class,
-                                String.format(signatureFormat, Compensate.class.getSimpleName().toLowerCase(Locale.ROOT)))));
-        // complete
-        List<AnnotatedMethod<? super X>> methodsWithCompleteNonJaxRS = methodsWithComplete.stream()
-                .filter(method -> !method.isAnnotationPresent(Path.class)) // it's not a REST method(!?)
-                .collect(Collectors.toList());
-        methodsWithComplete.removeAll(methodsWithCompleteNonJaxRS);
-        methodsWithCompleteNonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
+                        ErrorDetailsPrinter.NON_JAX_RS_SIGNATURE.apply(method, Compensate.class)));
+        metadata.getAnnotatedNonJaxRsMethods(Complete.class).stream()
+                .filter(LraAnnotationProcessingExtension.methodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
-                        getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Complete.class,
-                                String.format(signatureFormat, Complete.class.getSimpleName().toLowerCase(Locale.ROOT)))));
-        // status
-        List<AnnotatedMethod<? super X>> methodsWithStatusNonJaxRS = methodsWithStatus.stream()
-                .filter(method -> !method.isAnnotationPresent(Path.class)) // it's not a REST method(!?)
-                .collect(Collectors.toList());
-        methodsWithStatus.removeAll(methodsWithStatusNonJaxRS);
-        methodsWithStatusNonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
+                        ErrorDetailsPrinter.NON_JAX_RS_SIGNATURE.apply(method, Complete.class)));
+        metadata.getAnnotatedNonJaxRsMethods(Status.class).stream()
+                .filter(LraAnnotationProcessingExtension.methodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
-                        getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Status.class,
-                                String.format(signatureFormat, Status.class.getSimpleName().toLowerCase(Locale.ROOT)))));
-
-        // afterlra
-        List<AnnotatedMethod<? super X>> methodsWithAfterLRANonJaxRS = methodsWithAfterLRA.stream()
-                .filter(method -> !method.isAnnotationPresent(Path.class)) // it's not a REST method(!?)
-                .collect(Collectors.toList());
-        methodsWithAfterLRANonJaxRS.forEach(methodsWithAfterLRA::remove);
-        methodsWithAfterLRANonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, LRAStatus.class))
+                        ErrorDetailsPrinter.NON_JAX_RS_SIGNATURE.apply(method, Status.class)));
+        metadata.getAnnotatedNonJaxRsMethods(AfterLRA.class).stream()
+                .filter(LraAnnotationProcessingExtension.methodSignatureChecker(URI.class, LRAStatus.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
-                        getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), AfterLRA.class,
-                                String.format(signatureFormat, AfterLRA.class.getSimpleName().toLowerCase(Locale.ROOT)))));
-
-        // forget
-        List<AnnotatedMethod<? super X>> methodsWithForgetNonJaxRS = methodsWithForget.stream()
-                .filter(method -> !method.isAnnotationPresent(Path.class)) // it's not a REST method(!?)
-                .collect(Collectors.toList());
-        methodsWithForget.removeAll(methodsWithForgetNonJaxRS);
-        methodsWithForgetNonJaxRS.stream()
-                .filter(LraAnnotationProcessingExtension.createNonJaxRsMethodSignatureChecker(URI.class, URI.class))
+                        ErrorDetailsPrinter.NON_JAX_RS_SIGNATURE.apply(method, AfterLRA.class)));
+        metadata.getAnnotatedNonJaxRsMethods(Forget.class).stream()
+                .filter(LraAnnotationProcessingExtension.methodSignatureChecker(URI.class, URI.class))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_METHOD_SIGNATURE_NON_JAXRS_RESOURCE,
-                        getMethodSignatureErrorMsg(method, method.getJavaMember().getDeclaringClass(), Forget.class,
-                                String.format(signatureFormat, Forget.class.getSimpleName().toLowerCase(Locale.ROOT)))));
+                        ErrorDetailsPrinter.NON_JAX_RS_SIGNATURE.apply(method, Forget.class)));
 
         // --------------------------------------------------------------------------------------------
         // REST style methods requires all necessary REST annotations
-        if (methodsWithCompensate.size() > 0) { // only one @Compensate method permitted on class
-            // @Compensate - requires @Path and @PUT
-            final AnnotatedMethod<? super X> methodWithCompensate = methodsWithCompensate.get(0);
-            Consumer<Class<? extends Annotation>> compensateMissingJaxRsAnnotation = missingJaxRsAnnotationFailure(methodWithCompensate, Compensate.class);
-            boolean isCompensateContainsPathAnnotation = methodWithCompensate.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(Path.class));
-            if (!isCompensateContainsPathAnnotation) {
-                compensateMissingJaxRsAnnotation.accept(Path.class);
-            }
-            boolean isCompensateContainsPutAnnotation = methodWithCompensate.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(PUT.class));
-            if (!isCompensateContainsPutAnnotation) {
-                compensateMissingJaxRsAnnotation.accept(PUT.class);
-            }
-            boolean isCompensateParametersContainsSuspended = methodWithCompensate.getParameters().stream().flatMap(p -> p.getAnnotations().stream())
-                    .anyMatch(a -> a.annotationType().equals(Suspended.class));
-            if (isCompensateParametersContainsSuspended) {
-                if (methodsWithStatus.size() == 0 || methodsWithForget.size() == 0) {
-                    FailureCatalog.INSTANCE.add(getMissingAnnotationsForAsyncHandling(methodWithCompensate, Compensate.class));
-                }
-            }
+        // @Compensate - requires @Path and @PUT
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Compensate.class, Path.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                    ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Compensate.class, Path.class)));
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Compensate.class, PUT.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                    ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Compensate.class, PUT.class)));
+        // @Complete - requires @Path and @PUT
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Complete.class, Path.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Complete.class, Path.class)));
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Complete.class, PUT.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Complete.class, PUT.class)));
+        // @Status or @Forget is not defined, let's verify if @Suspend is used for complete and compensate
+        if (metadata.getAnnotatedMethods(Status.class).isEmpty() || metadata.getAnnotatedMethods(Forget.class).isEmpty()) {
+            checkSuspendedAsync(metadata, Compensate.class);
+            checkSuspendedAsync(metadata, Complete.class);
         }
-
-        if (methodsWithAfterLRA.size() > 0) {
-            // @AfterLRA - requires @Path and @PUT
-            final AnnotatedMethod<? super X> methodWithAfterLRA = methodsWithAfterLRA.iterator().next();
-            Consumer<Class<? extends Annotation>> afterLRAMissingJaxRsAnnotation = missingJaxRsAnnotationFailure(methodWithAfterLRA, AfterLRA.class);
-            boolean isAfterLRAContainsPathAnnotation = methodWithAfterLRA.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(Path.class));
-            if (!isAfterLRAContainsPathAnnotation) {
-                afterLRAMissingJaxRsAnnotation.accept(Path.class);
-            }
-            boolean isCompensateContainsPutAnnotation = methodWithAfterLRA.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(PUT.class));
-            if (!isCompensateContainsPutAnnotation) {
-                afterLRAMissingJaxRsAnnotation.accept(PUT.class);
-            }
-        }
-
-        if (methodsWithComplete.size() > 0) {
-            // @Complete - requires @Path and @PUT
-            final AnnotatedMethod<? super X> methodWithComplete = methodsWithComplete.get(0);
-            Consumer<Class<? extends Annotation>> completeMissingJaxRsAnnotation = missingJaxRsAnnotationFailure(methodWithComplete, Complete.class);
-            boolean isCompleteContainsPathAnnotation = methodWithComplete.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(Path.class));
-            if (!isCompleteContainsPathAnnotation) {
-                completeMissingJaxRsAnnotation.accept(Path.class);
-            }
-            boolean isCompleteContainsPutAnnotation = methodWithComplete.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(PUT.class));
-            if (!isCompleteContainsPutAnnotation) {
-                completeMissingJaxRsAnnotation.accept(PUT.class);
-            }
-            boolean isCompleteParametersContainsSuspended = methodWithComplete.getParameters().stream().flatMap(p -> p.getAnnotations().stream())
-                    .anyMatch(a -> a.annotationType().equals(Suspended.class));
-            if (isCompleteParametersContainsSuspended) {
-                if (methodsWithStatus.size() == 0 || methodsWithForget.size() == 0) {
-                    FailureCatalog.INSTANCE.add(getMissingAnnotationsForAsyncHandling(methodWithComplete, Complete.class));
-                }
-            }
-        }
-
-        if (methodsWithStatus.size() > 0) {
-            // @Status - requires @Path and @GET
-            final AnnotatedMethod<? super X> methodWithStatus = methodsWithStatus.get(0);
-            Consumer<Class<? extends Annotation>> statusMissingJaxRsAnnotation = missingJaxRsAnnotationFailure(methodWithStatus, Status.class);
-            boolean isStatusContainsPathAnnotation = methodWithStatus.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(Path.class));
-            if (!isStatusContainsPathAnnotation) {
-                statusMissingJaxRsAnnotation.accept(Path.class);
-            }
-            boolean isStatusContainsGetAnnotation = methodWithStatus.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(GET.class));
-            if (!isStatusContainsGetAnnotation) {
-                statusMissingJaxRsAnnotation.accept(GET.class);
-            }
-        }
-
-        if (methodsWithLeave.size() > 0) {
-            // @Leave - requires @PUT
-            final AnnotatedMethod<? super X> methodWithLeave = methodsWithLeave.get(0);
-            boolean isLeaveContainsPutAnnotation = methodWithLeave.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(PUT.class));
-            if (!isLeaveContainsPutAnnotation) {
-                missingJaxRsAnnotationFailure(methodWithLeave, Leave.class).accept(PUT.class);
-            }
-        }
-
-        if (methodsWithForget.size() > 0) {
-            // @Forget - requires @DELETE
-            final AnnotatedMethod<? super X> methodWithForget = methodsWithForget.get(0);
-            boolean isForgetContainsPutAnnotation = methodWithForget.getAnnotations().stream().anyMatch(a -> a.annotationType().equals(DELETE.class));
-            if (!isForgetContainsPutAnnotation) {
-                missingJaxRsAnnotationFailure(methodWithForget, Forget.class).accept(DELETE.class);
-            }
-        }
+        // @AfterLRA - requires @Path and @PUT
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(AfterLRA.class, Path.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(AfterLRA.class, Path.class)));
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(AfterLRA.class, PUT.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(AfterLRA.class, PUT.class)));
+        // @Status - requires @Path and @GET
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Status.class, Path.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Status.class, Path.class)));
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Status.class, GET.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Status.class, GET.class)));
+        // @Leave - requires @PUT
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Leave.class, PUT.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Leave.class, PUT.class)));
+        // @Forget - requires @DELETE
+        metadata.getAnnotatedJaxRsMethodsWithoutCompound(Leave.class, DELETE.class)
+                .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
+                        ErrorDetailsPrinter.MISSING_JAX_RS.apply(method).apply(Leave.class, DELETE.class)));
     }
 
-    private static Consumer<Class<? extends Annotation>> missingJaxRsAnnotationFailure(AnnotatedMethod<?> method, Class<? extends Annotation> annotation) {
-        return missingAnnotation -> FailureCatalog.INSTANCE.add(ErrorCode.WRONG_JAXRS_COMPLEMENTARY_ANNOTATION,
-                String.format("Method '%s' of class '%s' annotated with '%s' misses complementary annotation %s.",
-                        method.getJavaMember().getName(), method.getJavaMember().getDeclaringClass(),
-                        annotation.getName(), missingAnnotation.getName()));
-
+    private <X> void checkSuspendedAsync(LraAnnotationMetadata<X> metadata, Class<? extends Annotation> lraAnnotation) {
+        metadata.getAnnotatedJaxRsMethods(lraAnnotation).forEach(method ->
+                    method.getParameters().stream()
+                            .flatMap(p -> p.getAnnotations().stream())
+                            .filter(a -> a.annotationType().equals(Suspended.class)) // find if method parameter is annotated with @Suspended
+                            .findAny().ifPresent(sa -> FailureCatalog.INSTANCE.add(ErrorCode.MISSING_SUSPEND_ASYNC_CALLBACK,
+                                    ErrorDetailsPrinter.METHOD_WITH_LRA.apply(method, lraAnnotation)))
+        );
     }
 
-    private static String getMissingAnnotationsForAsyncHandling(AnnotatedMethod<?> method, Class<?> completionAnnotation) {
-        return String.format("Method '%s' of class '%s' annotated with '%s' is defined being asynchronous via @Suspend parameter annotation. " +
-            "The LRA class has to contain @Status and @Forget annotations to activate such handling.",
-                method.getJavaMember().getName(), method.getJavaMember().getDeclaringClass().getName(),
-                completionAnnotation.getName());
-    }
-
-    private static String getMethodSignatureErrorMsg(AnnotatedMethod<?> method, Class<?> clazz, Class<?> lraTypeAnnotation, String correctSignature) {
-        return String.format("Signature for annotation '%s' in the class '%s' on method '%s'. It should be '%s'",
-                lraTypeAnnotation.getName(), clazz.getName(), method.getJavaMember().getName(), correctSignature);
-    }
-
-    private static Predicate<AnnotatedMethod<?>> createNonJaxRsMethodSignatureChecker(Class<?>... expectedParameterTypes) {
+    private static Predicate<AnnotatedMethod<?>> methodSignatureChecker(Class<?>... expectedParameterTypes) {
         return method -> {
             // when the method is not public
             if (!Modifier.isPublic(method.getJavaMember().getModifiers())) {

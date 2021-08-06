@@ -38,7 +38,7 @@ public enum FailureCatalog {
     /**
      * Adding a failure string under the list of failures represented by this catalog.
      */
-    public void add(String failureDescription) {
+    private void add(String failureDescription) {
         failureCatalog.add(Failure.instance(failureDescription));
     }
 
@@ -46,7 +46,7 @@ public enum FailureCatalog {
      * Adding a failure string under the list of failures represented by this catalog. No error code is used.
      * The format of {@link String#format(String, Object...)} is expected.
      */
-    public void add(String format, Object... params) {
+    private void add(String format, Object... params) {
         failureCatalog.add(Failure.instance(String.format(format, params)));
     }
 

@@ -15,6 +15,7 @@ import org.eclipse.microprofile.lra.annotation.Forget;
 import org.eclipse.microprofile.lra.annotation.Status;
 import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 
+import javax.ws.rs.Path;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -67,6 +68,34 @@ public final class LraAnnotationMetadata<X> {
      */
     List<AnnotatedMethod<?>> getAnnotatedMethods(final Class<? extends Annotation> annotationClass) {
         return annotatedMethods.get(annotationClass);
+    }
+
+    /**
+     * Returns all methods in the type hierarchy that are annotated with the annotation and are considered as JAX-RS
+     * (i.e., the method defines the {@link javax.ws.rs.Path} annotation as well).
+     */
+    List<AnnotatedMethod<?>> getAnnotatedJaxRsMethods(final Class<? extends Annotation> lraAnnotation) {
+        return getAnnotatedFilteredMethods(lraAnnotation, true);
+    }
+
+    /**
+     * Returns all methods in the type hierarchy that are annotated with the annotation and are considered as <b>non</b>-JAX-RS
+     * (i.e., the method does not define the {@link javax.ws.rs.Path} as a compound annotation).
+     */
+    List<AnnotatedMethod<?>> getAnnotatedNonJaxRsMethods(final Class<? extends Annotation> lraAnnotation) {
+        return getAnnotatedFilteredMethods(lraAnnotation, true);
+    }
+
+    private List<AnnotatedMethod<?>> getAnnotatedFilteredMethods(final Class<? extends Annotation> lraAnnotation, boolean isJaxRs) {
+       return getMethodsForAnnotationStream(lraAnnotation)
+                .filter(method -> method.isAnnotationPresent(Path.class) == isJaxRs)
+                .collect(Collectors.toList());
+    }
+
+    Stream<AnnotatedMethod<?>> getAnnotatedJaxRsMethodsWithoutCompound(final Class<? extends Annotation> lraAnnotation, final Class<? extends Annotation> compoundAnnotation) {
+        return this.getAnnotatedJaxRsMethods(lraAnnotation).stream()
+                .filter(m -> m.getAnnotations().stream()
+                        .noneMatch(a -> a.annotationType().equals(compoundAnnotation)));
     }
 
     /**
