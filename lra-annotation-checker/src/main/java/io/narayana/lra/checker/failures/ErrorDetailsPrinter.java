@@ -27,6 +27,11 @@ public final class ErrorDetailsPrinter {
                         "Multiple annotations '%s' in the class '%s' on methods %s.",
                         clazz.getName(), annotatedLraClass, toMethodNames(methods));
 
+    public static Function<AnnotatedMethod<?>, String> METHOD_INFO =
+            method -> String.format("Method '%s', class '%s', annotations '%s'.",
+                    method.getJavaMember().getName(),
+                    method.getJavaMember().getDeclaringClass(), method.getAnnotations());
+
     private static List<String> toMethodNames(List<AnnotatedMethod<?>> annotatedMethods) {
         return annotatedMethods.stream().map(a -> a.getJavaMember().getName()).collect(Collectors.toList());
     }

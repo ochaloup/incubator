@@ -50,7 +50,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.List;
@@ -81,44 +80,42 @@ public class LraAnnotationProcessingExtension implements Extension {
     <X> void processLraAnnotatedType(@Observes @WithAnnotations({LRA.class}) ProcessAnnotatedType<X> classAnnotatedWithLra) {
         log.debugf("Processing class:", classAnnotatedWithLra);
 
-        // Let working only with instantiable classes - no abstract, no interface
+        // LRA works only with instantiable classes - no abstract, no interface
         Class<X> classAnnotated = classAnnotatedWithLra.getAnnotatedType().getJavaClass();
         if (classAnnotated.isAnnotation() || classAnnotated.isEnum() || classAnnotated.isInterface() || Modifier.isAbstract(classAnnotated.getModifiers())) {
             log.debugf("Skipping class: %s as it's not standard instantiable class", classAnnotatedWithLra);
             return;
         }
 
-        Supplier<Stream<AnnotatedMethod<? super X>>> methodsSupplier = () -> classAnnotatedWithLra.getAnnotatedType().getMethods().stream();
-        String classAnnotatedWithLraName = classAnnotated.getName();
-
-        // LRA class has to contain @Compensate or @AfterLRA
-        if (methodsSupplier.get().noneMatch(m -> m.isAnnotationPresent(Compensate.class) || m.isAnnotationPresent(AfterLRA.class))) {
-            FailureCatalog.INSTANCE.add(ErrorCode.MISSING_ANNOTATIONS_COMPENSATE_AFTER_LRA,
-                    "Class: " + classAnnotatedWithLraName);
-        }
-
+        // Processing through the LRA class and collecting data
         LraAnnotationMetadata<X> metadata = LraAnnotationMetadata.loadMetadata(classAnnotatedWithLra.getAnnotatedType());
 
-        // Only one of these annotations is permitted in a class
+        // LRA class has to contain @Compensate or @AfterLRA
+        if (metadata.getAnnotatedMethods(Compensate.class).isEmpty() && metadata.getAnnotatedMethods(AfterLRA.class).isEmpty()) {
+            FailureCatalog.INSTANCE.add(ErrorCode.MISSING_ANNOTATIONS_COMPENSATE_AFTER_LRA,
+                    "Class: " + classAnnotated.getName());
+        }
+
+        // Only one LRA annotation is permitted per class
         LRA_METHOD_ANNOTATIONS.stream()
-                // @Status and @Leave may be used multiple times within one class (spec says nothing in particular on this)
+                // @Status and @Leave could be (maybe) used multiple times within one class (spec says nothing in particular)
                 .filter(clazz -> clazz == clazz )
-                .map(lraClass -> Tuple.of(lraClass, metadata.getDeclaredMethods(lraClass)))
+                .map(lraAnnotation -> Tuple.of(lraAnnotation, metadata.getAnnotatedMethods(lraAnnotation)))
                 .filter(t -> t.getValue().size() > 1) // multiple methods for the annotation was found
                 .forEach(t -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_THE_SAME_TYPE,
                         ErrorDetailsPrinter.MULTIPLE_ANNOTATIONS.apply(classAnnotated).apply(t.getKey(), t.getValue())));
 
-        // Multiple different LRA annotations at the same method does not make sense
+        // Multiple different LRA annotations does not make sense at the same method
         Set<Set<Class<? extends Annotation>>> lraAnnotationsCombination = LRA_METHOD_ANNOTATIONS.stream()
-                .flatMap(lraAnnotation -> LRA_METHOD_ANNOTATIONS.stream()
-                        .flatMap(lraAnnotation2 -> Stream.of(Sets.newHashSet(lraAnnotation, lraAnnotation2))))
-                .filter(s -> s.size() == 2)
+                .flatMap(oneLraAnnotation -> LRA_METHOD_ANNOTATIONS.stream() // generating any combination of two different LRA annotations
+                        .flatMap(lraAnnotation2 -> Stream.of(Sets.newHashSet(oneLraAnnotation, lraAnnotation2))))
+                .filter(s -> s.size() == 2) // filtering a set of one member, get rid of combinations of two same annotations
                 .collect(Collectors.toSet());
-        methodsSupplier.get().filter(method -> lraAnnotationsCombination.stream()
+        // processing all active methods and marking wrong any annotated with the combination of any two LRA annotations
+        classAnnotatedWithLra.getAnnotatedType().getMethods().stream().filter(method -> lraAnnotationsCombination.stream()
                 .anyMatch(annotationSet -> annotationSet.stream().allMatch(method::isAnnotationPresent)))
                 .forEach(method -> FailureCatalog.INSTANCE.add(ErrorCode.MULTIPLE_ANNOTATIONS_OF_VARIOUS_TYPES,
-                        String.format("Method '%s', class '%s', annotations '%s'.", method.getJavaMember().getName(),
-                                method.getJavaMember().getDeclaringClass(), method.getAnnotations())));
+                        ErrorDetailsPrinter.METHOD_INFO.apply(method)));
 
         // -------------------------------------------------------------------------------------------
         // CDI style methods does not require @Path/@<method> but requires particular method signature

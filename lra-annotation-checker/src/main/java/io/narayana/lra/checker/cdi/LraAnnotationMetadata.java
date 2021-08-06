@@ -43,8 +43,8 @@ public final class LraAnnotationMetadata<X> {
     // class hierarchy of the class with @LRA
     private final List<Class<? super X>> classHierarchy;
     // LRA callback methods
-    private final Map<Class<? extends Annotation>, Optional<AnnotatedMethod<? super X>>> activeMethods;
-    private final Map<Class<? extends Annotation>, List<AnnotatedMethod<?>>> declaredMethods;
+    private final Map<Class<? extends Annotation>, Optional<AnnotatedMethod<? super X>>> mostConcreteActiveMethods;
+    private final Map<Class<? extends Annotation>, List<AnnotatedMethod<?>>> annotatedMethods;
 
     static <X> LraAnnotationMetadata<X> loadMetadata(final AnnotatedType<X> lraAnnotatedClass) {
         return new LraAnnotationMetadata<X>(lraAnnotatedClass);
@@ -56,17 +56,17 @@ public final class LraAnnotationMetadata<X> {
         this.lraAnnotatedCass = lraAnnotatedType.getJavaClass();
         this.classHierarchy = getClassHierarchy(lraAnnotatedCass);
 
-        declaredMethods = LRA_METHOD_ANNOTATIONS.stream()
-                .collect(Collectors.toMap(Function.identity(), this::getDeclaredMethodsForAnnotation));
-        activeMethods = LRA_METHOD_ANNOTATIONS.stream()
-                .collect(Collectors.toMap(Function.identity(), this::getAMethodForAnnotation));
+        annotatedMethods = LRA_METHOD_ANNOTATIONS.stream()
+                .collect(Collectors.toMap(Function.identity(), this::getMethodsForAnnotation));
+        mostConcreteActiveMethods = LRA_METHOD_ANNOTATIONS.stream()
+                .collect(Collectors.toMap(Function.identity(), this::getMostConcreteMethodForAnnotation));
     }
 
     /**
      * Returns all methods in the type hierarchy that are annotated with the annotation.
      */
-    List<AnnotatedMethod<?>> getDeclaredMethods(final Class<? extends Annotation> annotationClass) {
-        return declaredMethods.get(annotationClass);
+    List<AnnotatedMethod<?>> getAnnotatedMethods(final Class<? extends Annotation> annotationClass) {
+        return annotatedMethods.get(annotationClass);
     }
 
     /**
@@ -110,9 +110,9 @@ public final class LraAnnotationMetadata<X> {
      * class A is a parent of class B, both declares @AfterLRA annotation, only method from B will be returned here.
      * When the class hierarchy does *not* define a method for the annotation then empty {@link Optional} is returned.
      */
-    private Optional<AnnotatedMethod<? super X>> getAMethodForAnnotation(final Class<? extends Annotation> annotationClass) {
+    private Optional<AnnotatedMethod<? super X>> getMostConcreteMethodForAnnotation(final Class<? extends Annotation> annotationClass) {
         Optional<Method> mostConcreteAnnotatedMethod = getMethodHierarchy(classHierarchy, annotationClass).stream().findFirst();
-        return getDeclaredMethodsForAnnotationStream(annotationClass)
+        return getMethodsForAnnotationStream(annotationClass)
                 .filter(m -> {
                     return !mostConcreteAnnotatedMethod.isPresent() && m.getJavaMember().getDeclaringClass() == mostConcreteAnnotatedMethod.get().getDeclaringClass();
                 })
@@ -122,13 +122,13 @@ public final class LraAnnotationMetadata<X> {
     /**
      * Returns all active annotated methods for the annotated type from whole type hierarchy as a stream.
      */
-    private Stream<AnnotatedMethod<? super X>> getDeclaredMethodsForAnnotationStream(final Class<? extends Annotation> annotationClass) {
+    private Stream<AnnotatedMethod<? super X>> getMethodsForAnnotationStream(final Class<? extends Annotation> annotationClass) {
         return lraAnnotatedType.getMethods().stream()
                 .filter(m -> m.isAnnotationPresent(annotationClass));
     }
 
-    private List<AnnotatedMethod<?>> getDeclaredMethodsForAnnotation(final Class<? extends Annotation> annotationClass) {
-        return getDeclaredMethodsForAnnotationStream(annotationClass)
+    private List<AnnotatedMethod<?>> getMethodsForAnnotation(final Class<? extends Annotation> annotationClass) {
+        return getMethodsForAnnotationStream(annotationClass)
                 .collect(Collectors.toList());
     }
 }
